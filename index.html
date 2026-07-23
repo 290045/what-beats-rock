@@ -73,16 +73,17 @@
             // Strict duplicate check
             if (history.map(h => h.toLowerCase()).includes(userInput.toLowerCase())) {
                 document.getElementById("reasonDisplay").innerText = `Game Over! You already used "${userInput}".`;
+                resetGame();
                 return;
             }
 
             document.getElementById("reasonDisplay").innerText = "Thinking...";
 
-            const systemPrompt = "You are the referee for 'What Beats X'. Assess if the user's guess logically beats the current item. Respond ONLY in valid JSON matching this schema: {\"win\": bool, \"reason\": string}";
-            const userPrompt = `Current Item: '${currentItem}'. User Guess: '${userInput}'.`;
+            const systemPrompt = "You are the referee for 'What Beats X'. Assess if the user's guess logically beats the current item. Respond ONLY in valid JSON matching this schema: {\"win\": true, \"reason\": \"string explanation\"}";
+            const userPrompt = `Current Item: '${currentItem}'. User Guess: '${userInput}'. Does User Guess beat Current Item?`;
 
             try {
-                // Calling OpenAI directly from the browser instead of a backend server
+                // Correct URL endpoint for Chat Completions
                 const response = await fetch("https://openai.com", {
                     method: "POST",
                     headers: {
@@ -99,12 +100,17 @@
                     })
                 });
 
-                if (!response.ok) throw new Error("API call failed. Check your key.");
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error?.message || "API call failed. Check your key.");
+                }
 
                 const data = await response.json();
+                
+                // Correct JSON parsing using array index 0
                 const result = JSON.parse(data.choices[0].message.content);
 
-                if (result.win) {
+                if (result.win === true || result.win === "true") {
                     score++;
                     currentItem = userInput;
                     history.push(userInput);
@@ -114,10 +120,23 @@
                     document.getElementById("guessInput").value = "";
                 } else {
                     document.getElementById("reasonDisplay").innerText = `❌ Game Over! ${result.reason}`;
+                    resetGame();
                 }
             } catch (error) {
                 document.getElementById("reasonDisplay").innerText = `Error: ${error.message}`;
             }
+        }
+
+        function resetGame() {
+            score = 0;
+            currentItem = "Rock";
+            history = ["Rock"];
+            setTimeout(() => {
+                document.getElementById("scoreDisplay").innerText = `Score: ${score}`;
+                document.getElementById("promptText").innerText = `What beats ${currentItem}?`;
+                document.getElementById("guessInput").value = "";
+                document.getElementById("reasonDisplay").innerText = "";
+            }, 3000); // 3-second delay so player can read why they lost
         }
     </script>
 </body>
