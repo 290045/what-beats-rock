@@ -1,5 +1,7 @@
 # 290045's - What Beats Rock? 🪨✂️🚀
 
+Hosted at: https://290045.github.io/what-beats-rock/
+
 A serverless, AI-powered clone of the popular game "What Beats Rock?", built entirely with HTML, CSS, and vanilla JavaScript. 
 
 Unlike traditional Rock-Paper-Scissors games that use static rules, this game utilizes a Large Language Model (LLM) to dynamically judge whether any arbitrary user input beats the previous item. 
