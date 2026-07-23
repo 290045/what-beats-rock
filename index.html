@@ -11,23 +11,14 @@
         input:focus { border-color: #0070f3; }
         button { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #0070f3; color: white; border: none; border-radius: 6px; font-weight: bold; width: 87%; transition: background 0.2s; }
         button:hover { background: #0051b3; }
-        .key-section { margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid #e4e6eb; }
         #reasonDisplay { margin-top: 20px; font-size: 16px; line-height: 1.4; color: #4e5d78; min-height: 24px; }
-        .clear-key-btn { position: absolute; top: 15px; right: 15px; background: transparent; color: #8e9aa8; font-size: 12px; font-weight: normal; padding: 4px 8px; width: auto; border: 1px solid #e4e6eb; border-radius: 4px; }
-        .clear-key-btn:hover { background: #f0f2f5; color: #1a1a1a; }
+        .high-score { font-size: 14px; color: #8e9aa8; margin-bottom: 10px; }
     </style>
 </head>
 <body>
     <div class="box">
-        <button id="clearKeyBtn" class="clear-key-btn" onclick="clearKey()" style="display: none;">Change API Key</button>
-
-        <div class="key-section" id="keySection">
-            <h3>Enter OpenAI API Key to Play</h3>
-            <input type="password" id="apiKeyInput" placeholder="sk-proj-...">
-            <button onclick="saveKey()">Save Key Locally</button>
-        </div>
-
-        <div id="gameSection" style="display: none;">
+        <div id="gameSection">
+            <div id="highScoreDisplay" class="high-score">Personal Best: 0</div>
             <h2 id="scoreDisplay">Score: 0</h2>
             <h1 id="promptText">What beats Rock?</h1>
             <input type="text" id="guessInput" placeholder="Type your guess..." onkeypress="handleKeyPress(event)">
@@ -37,125 +28,87 @@
     </div>
 
     <script>
-        let currentItem = "Rock";
+        let currentItem = "rock";
         let score = 0;
-        let history = ["Rock"];
-        let apiKey = "";
+        let history = ["rock"];
+        let highScore = localStorage.getItem("wbr_high_score") || 0;
+
+        // A built-in logical dictionary to judge rules without needing an AI API key
+        const rules = {
+            "rock": {
+                weaknesses: ["paper", "water", "dynamite", "laser", "drill", "pickaxe", "earthquake", "tsunami", "acid"],
+                reasons: { "paper": "Paper covers rock!", "water": "Water erodes rock over time!", "dynamite": "Dynamite blows rock to pieces!" }
+            },
+            "paper": {
+                weaknesses: ["scissors", "fire", "acid", "shredder", "laser", "knife", "sword"],
+                reasons: { "scissors": "Scissors cut paper!", "fire": "Fire burns paper completely!", "shredder": "A paper shredder destroys it!" }
+            },
+            "scissors": {
+                weaknesses: ["rock", "fire", "laser", "hammer", "magnet", "rust", "acid"],
+                reasons: { "rock": "Rock crushes scissors!", "fire": "Fire melts metal scissors!", "hammer": "A hammer smashes scissors!" }
+            },
+            "fire": {
+                weaknesses: ["water", "sand", "extinguisher", "ice", "vacuum", "tsunami"],
+                reasons: { "water": "Water douses fire!", "sand": "Sand smothers the flames!", "extinguisher": "Fire extinguisher puts it out!" }
+            },
+            "water": {
+                weaknesses: ["sponge", "sun", "evaporation", "ice", "electricity", "dirt"],
+                reasons: { "sponge": "Sponge absorbs all the water!", "sun": "The sun evaporates the water!", "electricity": "Electricity electrocutes the water!" }
+            }
+        };
 
         window.onload = function() {
-            const savedKey = localStorage.getItem("openai_api_key");
-            if (savedKey) {
-                apiKey = savedKey;
-                showGame();
-            }
-        }
-
-        function saveKey() {
-            const input = document.getElementById("apiKeyInput").value.trim();
-            if (!input) return alert("Please enter a valid key!");
-            apiKey = input;
-            localStorage.setItem("openai_api_key", apiKey);
-            showGame();
-        }
-
-        function clearKey() {
-            localStorage.removeItem("openai_api_key");
-            apiKey = "";
-            document.getElementById("apiKeyInput").value = "";
-            hideGame();
-        }
-
-        function showGame() {
-            document.getElementById("keySection").style.display = "none";
-            document.getElementById("gameSection").style.display = "block";
-            document.getElementById("clearKeyBtn").style.display = "block";
-        }
-
-        function hideGame() {
-            document.getElementById("keySection").style.display = "block";
-            document.getElementById("gameSection").style.display = "none";
-            document.getElementById("clearKeyBtn").style.display = "none";
-            
-            score = 0;
-            currentItem = "Rock";
-            history = ["Rock"];
-            document.getElementById("scoreDisplay").innerText = `Score: ${score}`;
-            document.getElementById("promptText").innerText = `What beats ${currentItem}?`;
-            document.getElementById("guessInput").value = "";
-            document.getElementById("reasonDisplay").innerText = "";
+            document.getElementById("highScoreDisplay").innerText = `Personal Best: ${highScore}`;
         }
 
         function handleKeyPress(event) {
             if (event.key === "Enter") submitGuess();
         }
 
-        async function submitGuess() {
-            const userInput = document.getElementById("guessInput").value.trim();
+        function submitGuess() {
+            const userInput = document.getElementById("guessInput").value.trim().toLowerCase();
             if (!userInput) return;
 
-            if (history.map(h => h.toLowerCase()).includes(userInput.toLowerCase())) {
+            if (history.includes(userInput)) {
                 document.getElementById("reasonDisplay").innerText = `Game Over! You already used "${userInput}".`;
                 resetGame();
                 return;
             }
 
-            document.getElementById("reasonDisplay").innerText = "Thinking...";
+            // Fallback rule mapping if the exact word isn't fully defined yet
+            const targetRules = rules[currentItem] || { weaknesses: ["god", "black hole", "laser", "void", "universe"], reasons: {} };
 
-            const systemPrompt = "You are the referee for 'What Beats X'. Assess if the user's guess logically beats the current item. Respond ONLY in valid JSON matching this schema: {\"win\": true, \"reason\": \"string explanation\"}";
-            const userPrompt = `Current Item: '${currentItem}'. User Guess: '${userInput}'. Does User Guess beat Current Item?`;
-
-            try {
-                // Wrap the endpoint inside an allorigins CORS proxy URL wrapper
-                const proxyUrl = "https://allorigins.win" + encodeURIComponent("https://api.openai.com/v1/chat/completions");
-
-                const response = await fetch(proxyUrl, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${apiKey}`
-                    },
-                    body: JSON.stringify({
-                        model: "gpt-4o-mini",
-                        response_format: { type: "json_object" },
-                        messages: [
-                            { role: "system", content: systemPrompt },
-                            { role: "user", content: userPrompt }
-                        ]
-                    })
-                });
-
-                if (!response.ok) {
-                    const errData = await response.json().catch(() => ({}));
-                    throw new Error(errData.error?.message || "API call failed. Check your key.");
+            if (targetRules.weaknesses.includes(userInput) || userInput === "black hole" || userInput === "god" || userInput === "chuck norris") {
+                // Determine a custom explanation or fallback text
+                const reasonText = targetRules.reasons?.[userInput] || `${userInput} is dynamically stronger than ${currentItem}!`;
+                
+                score++;
+                currentItem = userInput;
+                history.push(userInput);
+                
+                document.getElementById("scoreDisplay").innerText = `Score: ${score}`;
+                document.getElementById("promptText").innerText = `What beats ${currentItem.charAt(0).toUpperCase() + currentItem.slice(1)}?`;
+                document.getElementById("reasonDisplay").innerText = `✅ ${reasonText}`;
+                document.getElementById("guessInput").value = "";
+                
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem("wbr_high_score", highScore);
+                    document.getElementById("highScoreDisplay").innerText = `Personal Best: ${highScore}`;
                 }
-
-                const data = await response.json();
-                const result = JSON.parse(data.choices[0].message.content);
-
-                if (result.win === true || result.win === "true") {
-                    score++;
-                    currentItem = userInput;
-                    history.push(userInput);
-                    document.getElementById("scoreDisplay").innerText = `Score: ${score}`;
-                    document.getElementById("promptText").innerText = `What beats ${currentItem}?`;
-                    document.getElementById("reasonDisplay").innerText = `✅ ${result.reason}`;
-                    document.getElementById("guessInput").value = "";
-                } else {
-                    document.getElementById("reasonDisplay").innerText = `❌ Game Over! ${result.reason}`;
-                    resetGame();
-                }
-            } catch (error) {
-                document.getElementById("reasonDisplay").innerText = `Error: ${error.message}`;
+            } else {
+                document.getElementById("reasonDisplay").innerText = `❌ Game Over! ${userInput} cannot beat ${currentItem}.`;
+                resetGame();
             }
         }
 
         function resetGame() {
             score = 0;
-            currentItem = "Rock";
-            history = ["Rock"];
+            currentItem = "rock";
+            history = ["rock"];
             setTimeout(() => {
                 document.getElementById("scoreDisplay").innerText = `Score: ${score}`;
-                document.getElementById("promptText").innerText = `What beats ${currentItem}?`;
+                document.getElementById("promptText").innerText = `What beats Rock?`;
                 document.getElementById("guessInput").value = "";
                 document.getElementById("reasonDisplay").innerText = "";
             }, 3000);
