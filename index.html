@@ -6,17 +6,24 @@
     <title>290045's What Beats Rock?</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: #f0f2f5; padding-top: 50px; color: #1a1a1a; }
-        .box { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); display: inline-block; max-width: 400px; width: 90%; }
+        .box { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); display: inline-block; max-width: 400px; width: 90%; position: relative; }
         input { padding: 12px; font-size: 16px; width: 80%; border: 2px solid #e4e6eb; border-radius: 6px; margin-bottom: 15px; outline: none; }
         input:focus { border-color: #0070f3; }
-        button { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #0070f3; color: white; border: none; border-radius: 6px; font-weight: bold; width: 87%; }
+        button { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #0070f3; color: white; border: none; border-radius: 6px; font-weight: bold; width: 87%; transition: background 0.2s; }
         button:hover { background: #0051b3; }
         .key-section { margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid #e4e6eb; }
-        #reasonDisplay { margin-top: 20px; font-size: 16px; line-height: 1.4; color: #4e5d78; }
+        #reasonDisplay { margin-top: 20px; font-size: 16px; line-height: 1.4; color: #4e5d78; min-height: 24px; }
+        
+        /* New styling for the Change Key Button */
+        .clear-key-btn { position: absolute; top: 15px; right: 15px; background: transparent; color: #8e9aa8; font-size: 12px; font-weight: normal; padding: 4px 8px; width: auto; border: 1px solid #e4e6eb; border-radius: 4px; }
+        .clear-key-btn:hover { background: #f0f2f5; color: #1a1a1a; }
     </style>
 </head>
 <body>
     <div class="box">
+        <!-- New Clear/Change Key button placed inside the container -->
+        <button id="clearKeyBtn" class="clear-key-btn" onclick="clearKey()" style="display: none;">Change API Key</button>
+
         <!-- API Key Input Section -->
         <div class="key-section" id="keySection">
             <h3>Enter OpenAI API Key to Play</h3>
@@ -57,9 +64,32 @@
             showGame();
         }
 
+        function clearKey() {
+            localStorage.removeItem("openai_api_key");
+            apiKey = "";
+            document.getElementById("apiKeyInput").value = "";
+            hideGame();
+        }
+
         function showGame() {
             document.getElementById("keySection").style.display = "none";
             document.getElementById("gameSection").style.display = "block";
+            document.getElementById("clearKeyBtn").style.display = "block"; // Show button when game is active
+        }
+
+        function hideGame() {
+            document.getElementById("keySection").style.display = "block";
+            document.getElementById("gameSection").style.display = "none";
+            document.getElementById("clearKeyBtn").style.display = "none"; // Hide button on setup screen
+            
+            // Hard reset game progress when exiting
+            score = 0;
+            currentItem = "Rock";
+            history = ["Rock"];
+            document.getElementById("scoreDisplay").innerText = `Score: ${score}`;
+            document.getElementById("promptText").innerText = `What beats ${currentItem}?`;
+            document.getElementById("guessInput").value = "";
+            document.getElementById("reasonDisplay").innerText = "";
         }
 
         function handleKeyPress(event) {
@@ -107,8 +137,8 @@
 
                 const data = await response.json();
                 
-                // Correct JSON parsing using array index [0]
-                const result = JSON.parse(data.choices[0].message.content);
+                // Correct JSON parsing using array index 0
+                const result = JSON.parse(data.choices.message.content);
 
                 if (result.win === true || result.win === "true") {
                     score++;
